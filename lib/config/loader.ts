@@ -98,18 +98,15 @@ const DEFAULT_MAX_WORKERS_PER_LEVEL = 2;
 
 function combineFallbacks(...lists: (string[] | undefined)[]): string[] {
   const seen = new Set<string>();
-  const merged: string[] = [];
   for (const list of lists) {
     if (!list) continue;
     for (const item of list) {
-      if (typeof item !== "string") continue;
-      if (!seen.has(item)) {
+      if (typeof item === "string") {
         seen.add(item);
-        merged.push(item);
       }
     }
   }
-  return merged;
+  return Array.from(seen);
 }
 
 function buildModelSpec(primary: string, ...fallbackLists: (string[] | undefined)[]): ModelSpec {
@@ -124,35 +121,52 @@ function parseModelEntry(roleId: string, level: string, entry: ModelEntry): Pars
     return { spec: entry };
   }
 
-  if (entry && typeof entry === "object") {
-    const anyEntry = entry as Record<string, unknown>;
-    const maxWorkers = typeof anyEntry.maxWorkers === "number" ? anyEntry.maxWorkers : undefined;
+  if (!entry || typeof entry !== "object") {
+    throw new Error(`Invalid model entry for ${roleId}.${level}: must specify a model or primary.`);
+  }
 
-    if (isModelSpecObject(entry as ModelSpec)) {
-      const specObj = entry as ModelSpecObject;
-      return { spec: buildModelSpec(specObj.primary, specObj.fallbacks), maxWorkers };
-    }
+  const recordEntry = entry as Record<string, unknown> & {
+    model?: unknown;
+    primary?: unknown;
+    fallbacks?: unknown;
+    maxWorkers?: unknown;
+  };
 
-    if (anyEntry.model !== undefined) {
-      const modelValue = anyEntry.model;
-      if (typeof modelValue === "string") {
-        return { spec: buildModelSpec(modelValue, anyEntry.fallbacks as string[] | undefined), maxWorkers };
-      }
-      if (modelValue && typeof modelValue === "object") {
-        const modelObj = modelValue as ModelSpecObject;
-        return {
-          spec: buildModelSpec(modelObj.primary, modelObj.fallbacks, anyEntry.fallbacks as string[] | undefined),
-          maxWorkers,
-        };
-      }
-    }
+  const maxWorkers = typeof recordEntry.maxWorkers === "number" ? recordEntry.maxWorkers : undefined;
+  const topLevelFallbacks = Array.isArray(recordEntry.fallbacks)
+    ? (recordEntry.fallbacks as string[])
+    : undefined;
 
-    if (typeof anyEntry.primary === "string") {
+  if (typeof recordEntry.primary === "string") {
+    return {
+      spec: buildModelSpec(recordEntry.primary, topLevelFallbacks),
+      maxWorkers,
+    };
+  }
+
+  if (recordEntry.model !== undefined) {
+    const modelValue = recordEntry.model;
+    if (typeof modelValue === "string") {
       return {
-        spec: buildModelSpec(anyEntry.primary, anyEntry.fallbacks as string[] | undefined),
+        spec: buildModelSpec(modelValue, topLevelFallbacks),
         maxWorkers,
       };
     }
+    if (modelValue && typeof modelValue === "object" && typeof (modelValue as Record<string, unknown>).primary === "string") {
+      const modelObj = modelValue as ModelSpecObject;
+      return {
+        spec: buildModelSpec(modelObj.primary, modelObj.fallbacks, topLevelFallbacks),
+        maxWorkers,
+      };
+    }
+  }
+
+  if (isModelSpecObject(entry as ModelSpec)) {
+    const specObj = entry as ModelSpecObject;
+    return {
+      spec: buildModelSpec(specObj.primary, specObj.fallbacks, topLevelFallbacks),
+      maxWorkers,
+    };
   }
 
   throw new Error(`Invalid model entry for ${roleId}.${level}: must specify a model or primary.`);

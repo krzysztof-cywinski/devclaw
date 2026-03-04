@@ -32,10 +32,11 @@ roles:
     models:
       junior: anthropic/claude-haiku-4-5
       medior:
-        primary: anthropic/claude-sonnet-4-6
-        fallbacks:
-          - openai/gpt-5-codex
-          - anthropic/claude-sonnet-4-5
+        model:
+          primary: anthropic/claude-sonnet-4-6
+          fallbacks:
+            - openai/gpt-5-codex
+            - anthropic/claude-sonnet-4-5
       senior: anthropic/claude-opus-4-6
   tester:
     models:
@@ -50,7 +51,7 @@ roles:
   # architect: false
 ```
 
-> **Tip:** Strings are treated as `{ primary: "<value>" }`. When editing by hand you can also use comma-separated shorthand (e.g. `primary, fallback1, fallback2`).
+> **Tip:** Keep simple cases as strings (equivalent to `{ model: "<value>" }`). To add fallbacks, wrap the spec under `model:` and list `primary` plus `fallbacks` as shown above. Comma-separated shorthand (`primary, fallback1, fallback2`) still works when editing by hand.
 
 **Role override fields** (all optional — only override what you need):
 

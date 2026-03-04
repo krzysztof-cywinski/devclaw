@@ -229,13 +229,32 @@ async function writeModelsToWorkflow(workspacePath: string, models: ModelConfig)
 
   // Merge models into roles section
   for (const [role, levels] of Object.entries(models)) {
+    const serializedLevels = serializeModelLevels(levels);
     if (!roles.has(role)) {
-      roles.set(role, doc.createNode({ models: levels }));
+      roles.set(role, doc.createNode({ models: serializedLevels }));
     } else {
       const roleNode = roles.get(role, true) as unknown as YAML.YAMLMap;
-      roleNode.set("models", doc.createNode(levels));
+      roleNode.set("models", doc.createNode(serializedLevels));
     }
   }
 
   await fs.writeFile(workflowPath, doc.toString({ lineWidth: 120 }), "utf-8");
+}
+
+function serializeModelLevels(levels: Record<string, ModelSpec>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [level, spec] of Object.entries(levels)) {
+    const normalized = normalizeModelSpec(spec);
+    if (normalized.fallbacks.length === 0) {
+      result[level] = normalized.primary;
+    } else {
+      result[level] = {
+        model: {
+          primary: normalized.primary,
+          fallbacks: [...normalized.fallbacks],
+        },
+      };
+    }
+  }
+  return result;
 }

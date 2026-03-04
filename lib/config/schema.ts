@@ -44,16 +44,18 @@ const ModelSpecObjectSchema = z.object({
   fallbacks: z.array(z.string()).optional(),
 });
 
+const ModelSpecWithMaxWorkersSchema = ModelSpecObjectSchema.extend({
+  maxWorkers: z.number().int().positive().optional(),
+});
+
 const ModelEntrySchema = z.union([
   z.string(),
   ModelSpecObjectSchema,
+  ModelSpecWithMaxWorkersSchema,
   z.object({
-    model: z.union([z.string(), ModelSpecObjectSchema]).optional(),
-    primary: z.string().optional(),
+    model: z.union([z.string(), ModelSpecObjectSchema]),
     fallbacks: z.array(z.string()).optional(),
     maxWorkers: z.number().int().positive().optional(),
-  }).refine((value) => value.model !== undefined || value.primary !== undefined || value.maxWorkers !== undefined, {
-    message: "Model entry must specify `model`, `primary`, or `maxWorkers`.",
   }),
 ]);
 

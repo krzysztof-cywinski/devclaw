@@ -11,12 +11,16 @@ import type { ModelSpec, ModelSpecObject } from "../roles/types.js";
  * Role override in workflow.yaml. All fields optional — only override what you need.
  * Set to `false` to disable a role entirely for a project.
  */
-/** Model entry: supports string specs, structured specs, and optional maxWorkers overrides. */
+/** Model entry: string shorthand, structured spec, or legacy { model, maxWorkers } object. */
 export type ModelEntry =
-  | ModelSpec
+  | string
   | {
-      model?: string | ModelSpecObject;
-      primary?: string;
+      primary: string;
+      fallbacks?: string[];
+      maxWorkers?: number;
+    }
+  | {
+      model: string | ModelSpecObject;
       fallbacks?: string[];
       maxWorkers?: number;
     };

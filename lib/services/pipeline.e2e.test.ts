@@ -125,7 +125,7 @@ describe("E2E pipeline", () => {
       await fs.mkdir(path.join(h.workspaceDir, "devclaw"), { recursive: true });
       await fs.writeFile(
         path.join(h.workspaceDir, "devclaw", "workflow.yaml"),
-        `roles:\n  developer:\n    models:\n      medior:\n        primary: anthropic/claude-sonnet-4-6\n        fallbacks:\n          - openai/gpt-5-codex\n          - anthropic/claude-haiku-4-5\n`,
+        `roles:\n  developer:\n    models:\n      medior:\n        model:\n          primary: anthropic/claude-sonnet-4-6\n          fallbacks:\n            - openai/gpt-5-codex\n            - anthropic/claude-haiku-4-5\n`,
         "utf-8",
       );
 
