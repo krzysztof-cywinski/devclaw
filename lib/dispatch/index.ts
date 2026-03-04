@@ -14,7 +14,7 @@ import {
   getRoleWorker,
   emptySlot,
 } from "../projects/index.js";
-import { resolveModel } from "../roles/index.js";
+import { resolveModel, normalizeModelSpec } from "../roles/index.js";
 import { notify, getNotificationConfig } from "./notify.js";
 import { loadConfig, type ResolvedRoleConfig } from "../config/index.js";
 import { ReviewPolicy, TestPolicy, resolveReviewRouting, resolveTestRouting, resolveNotifyChannel, isFeedbackState, hasReviewCheck, producesReviewableWork, hasTestPhase, detectOwner, getOwnerLabel, OWNER_LABEL_COLOR, getRoleLabelColor, STEP_ROUTING_COLOR, getStateLabels } from "../workflow/index.js";
@@ -63,6 +63,7 @@ export type DispatchResult = {
   sessionKey: string;
   level: string;
   model: string;
+  fallbacks?: string[];
   announcement: string;
 };
 
@@ -96,7 +97,10 @@ export async function dispatchTask(
   const resolvedConfig = await loadConfig(workspaceDir, project.name);
   const resolvedRole = resolvedConfig.roles[role];
   const { timeouts } = resolvedConfig;
-  const model = resolveModel(role, level, resolvedRole);
+  const modelSpec = resolveModel(role, level, resolvedRole);
+  const normalizedModel = normalizeModelSpec(modelSpec);
+  const primaryModel = normalizedModel.primary;
+  const fallbackModels = normalizedModel.fallbacks;
   const roleWorker = getRoleWorker(project, role);
   const slot = roleWorker.levels[level]?.[slotIndex] ?? emptySlot();
   let existingSessionKey = slot.sessionKey;
@@ -260,6 +264,8 @@ export async function dispatchTask(
       level,
       name: botName,
       sessionAction,
+      model: primaryModel,
+      fallbacks: fallbackModels.length > 0 ? fallbackModels : undefined,
     },
     {
       workspaceDir,
@@ -280,7 +286,7 @@ export async function dispatchTask(
   // Step 3: Ensure session exists (fire-and-forget — don't wait for gateway)
   // Session key is deterministic, so we can proceed immediately
   const sessionLabel = formatSessionLabel(project.name, role, level, botName);
-  ensureSessionFireAndForget(sessionKey, model, workspaceDir, rc, timeouts.sessionPatchMs, sessionLabel);
+  ensureSessionFireAndForget(sessionKey, primaryModel, workspaceDir, rc, timeouts.sessionPatchMs, sessionLabel, fallbackModels);
 
   // Step 4: Send task to agent (fire-and-forget)
   // Model is set on the session via sessions.patch (step 3), not on the agent RPC —
@@ -310,13 +316,21 @@ export async function dispatchTask(
   // Step 6: Audit
   await auditDispatch(workspaceDir, {
     project: project.name, issueId, issueTitle,
-    role, level, model, sessionAction, sessionKey,
+    role, level, model: primaryModel, fallbacks: fallbackModels,
+    sessionAction, sessionKey,
     fromLabel, toLabel,
   });
 
   const announcement = buildAnnouncement(level, role, sessionAction, issueId, issueTitle, issueUrl, resolvedRole, botName);
 
-  return { sessionAction, sessionKey, level, model, announcement };
+  return {
+    sessionAction,
+    sessionKey,
+    level,
+    model: primaryModel,
+    fallbacks: fallbackModels.length > 0 ? fallbackModels : undefined,
+    announcement,
+  };
 }
 
 async function recordWorkerState(
@@ -346,7 +360,7 @@ async function auditDispatch(
   workspaceDir: string,
   opts: {
     project: string; issueId: number; issueTitle: string;
-    role: string; level: string; model: string; sessionAction: string;
+    role: string; level: string; model: string; fallbacks?: string[]; sessionAction: string;
     sessionKey: string; fromLabel: string; toLabel: string;
   },
 ): Promise<void> {
@@ -357,8 +371,15 @@ async function auditDispatch(
     sessionAction: opts.sessionAction, sessionKey: opts.sessionKey,
     labelTransition: `${opts.fromLabel} → ${opts.toLabel}`,
   });
+  const fallbackEntry = opts.fallbacks && opts.fallbacks.length > 0
+    ? { fallbacks: opts.fallbacks }
+    : {};
   await auditLog(workspaceDir, "model_selection", {
-    issue: opts.issueId, role: opts.role, level: opts.level, model: opts.model,
+    issue: opts.issueId,
+    role: opts.role,
+    level: opts.level,
+    model: opts.model,
+    ...fallbackEntry,
   });
 }
 

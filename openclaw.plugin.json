@@ -4,6 +4,26 @@
   "description": "Multi-project dev/qa pipeline orchestration for OpenClaw. Developer tiers, atomic task management, session health, and audit logging.",
   "configSchema": {
     "type": "object",
+    "$defs": {
+      "ModelSpec": {
+        "type": "object",
+        "properties": {
+          "primary": { "type": "string" },
+          "fallbacks": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "required": ["primary"],
+        "additionalProperties": false
+      },
+      "ModelSpecOrString": {
+        "anyOf": [
+          { "type": "string" },
+          { "$ref": "#/$defs/ModelSpec" }
+        ]
+      }
+    },
     "properties": {
       "models": {
         "type": "object",
@@ -13,17 +33,17 @@
             "type": "object",
             "description": "Developer tier models",
             "properties": {
-              "junior": { "type": "string" },
-              "medior": { "type": "string" },
-              "senior": { "type": "string" }
+              "junior": { "$ref": "#/$defs/ModelSpecOrString" },
+              "medior": { "$ref": "#/$defs/ModelSpecOrString" },
+              "senior": { "$ref": "#/$defs/ModelSpecOrString" }
             }
           },
           "qa": {
             "type": "object",
             "description": "QA tier models",
             "properties": {
-              "reviewer": { "type": "string" },
-              "tester": { "type": "string" }
+              "reviewer": { "$ref": "#/$defs/ModelSpecOrString" },
+              "tester": { "$ref": "#/$defs/ModelSpecOrString" }
             }
           }
         }

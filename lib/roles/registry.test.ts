@@ -24,6 +24,7 @@ import {
   getCompletionResults,
   isValidResult,
   getSessionKeyRolePattern,
+  normalizeModelSpec,
 } from "./index.js";
 
 describe("role registry", () => {
@@ -169,6 +170,24 @@ describe("models", () => {
     assert.strictEqual(resolveModel("developer", "junior", resolvedRole), "custom/model");
     // Levels not overridden fall through to registry defaults
     assert.strictEqual(resolveModel("developer", "medior", resolvedRole), "anthropic/claude-sonnet-4-5");
+  });
+
+  it("should normalize fallback chains when provided", () => {
+    const resolvedRole = {
+      levelMaxWorkers: { junior: 2, medior: 2, senior: 2 },
+      models: { medior: { primary: "anthropic/claude-sonnet-4-6", fallbacks: ["openai/gpt-5-codex"] } },
+      levels: ["junior", "medior", "senior"],
+      defaultLevel: "medior",
+      emoji: {},
+      completionResults: [] as string[],
+      enabled: true,
+    };
+    const spec = resolveModel("developer", "medior", resolvedRole);
+    const normalized = normalizeModelSpec(spec);
+    assert.deepStrictEqual(normalized, {
+      primary: "anthropic/claude-sonnet-4-6",
+      fallbacks: ["openai/gpt-5-codex"],
+    });
   });
 });
 

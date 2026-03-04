@@ -23,7 +23,7 @@ import { requireWorkspaceDir, resolveChannelId, resolveProject, resolveProvider,
 import { loadConfig } from "../../config/index.js";
 import { getActiveLabel } from "../../workflow/index.js";
 import { selectLevel } from "../../roles/model-selector.js";
-import { resolveModel } from "../../roles/index.js";
+import { resolveModel, normalizeModelSpec } from "../../roles/index.js";
 
 /** Queue label for research tasks. */
 const TO_RESEARCH_LABEL = "To Research";
@@ -119,14 +119,20 @@ Example:
         : selectLevel(title, description, role).level;
       const resolvedConfig = await loadConfig(workspaceDir, project.name);
       const resolvedRole = resolvedConfig.roles[role];
-      const model = resolveModel(role, level, resolvedRole);
+      const modelSpec = resolveModel(role, level, resolvedRole);
+      const normalizedModel = normalizeModelSpec(modelSpec);
 
       if (dryRun) {
         return jsonResult({
           success: true,
           dryRun: true,
           issue: { title, label: TO_RESEARCH_LABEL },
-          research: { level, model, status: "dry_run" },
+          research: {
+            level,
+            model: normalizedModel.primary,
+            fallbacks: normalizedModel.fallbacks.length > 0 ? normalizedModel.fallbacks : undefined,
+            status: "dry_run",
+          },
           announcement: `\u{1f4d0} [DRY RUN] Would create research ticket and dispatch ${role} (${level}) for: ${title}`,
         });
       }
@@ -192,6 +198,7 @@ Example:
           sessionKey: dr.sessionKey,
           level: dr.level,
           model: dr.model,
+          fallbacks: dr.fallbacks,
           sessionAction: dr.sessionAction,
           status: "in_progress",
         },

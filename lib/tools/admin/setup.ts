@@ -9,17 +9,21 @@ import type { ToolContext } from "../../types.js";
 import type { PluginContext } from "../../context.js";
 import { runSetup, type SetupOpts } from "../../setup/index.js";
 import { writeAllDefaults } from "../../setup/workspace.js";
-import { getAllDefaultModels, getAllRoleIds, getLevelsForRole } from "../../roles/index.js";
+import { getAllDefaultModels, getAllRoleIds, getLevelsForRole, normalizeModelSpec } from "../../roles/index.js";
+import type { ModelSpec } from "../../roles/index.js";
 import { ExecutionMode } from "../../workflow/index.js";
 
 export function createSetupTool(ctx: PluginContext) {
-  return (toolCtx: ToolContext) => ({
-    name: "setup",
-    label: "Setup",
-    description: `Execute DevClaw setup. Creates AGENTS.md, HEARTBEAT.md, TOOLS.md, devclaw/projects.json, devclaw/prompts/, and model level config. Optionally creates a new agent with channel binding. Called after onboard collects configuration.`,
-    parameters: {
-      type: "object",
-      properties: {
+  return (toolCtx: ToolContext) => {
+    const defaults = getAllDefaultModels();
+
+    return {
+      name: "setup",
+      label: "Setup",
+      description: `Execute DevClaw setup. Creates AGENTS.md, HEARTBEAT.md, TOOLS.md, devclaw/projects.json, devclaw/prompts/, and model level config. Optionally creates a new agent with channel binding. Called after onboard collects configuration.`,
+      parameters: {
+        type: "object",
+        properties: {
         newAgentName: {
           type: "string",
           description:
@@ -45,7 +49,7 @@ export function createSetupTool(ctx: PluginContext) {
               properties: Object.fromEntries(
                 getLevelsForRole(role).map((level) => [level, {
                   type: "string",
-                  description: `Default: ${getAllDefaultModels()[role]?.[level] ?? "auto"}`,
+                  description: `Default: ${formatModelSpec(defaults[role]?.[level] as ModelSpec | undefined)}`,
                 }]),
               ),
             }]),
@@ -115,7 +119,7 @@ export function createSetupTool(ctx: PluginContext) {
       lines.push("Models:");
       for (const [role, levels] of Object.entries(result.models)) {
         for (const [level, model] of Object.entries(levels)) {
-          lines.push(`  ${role}.${level}: ${model}`);
+          lines.push(`  ${role}.${level}: ${formatModelSpec(model as ModelSpec)}`);
         }
       }
       lines.push("");
@@ -135,5 +139,13 @@ export function createSetupTool(ctx: PluginContext) {
         summary: lines.join("\n"),
       });
     },
-  });
+    };
+  };
+}
+
+function formatModelSpec(spec?: ModelSpec): string {
+  if (!spec) return "auto";
+  const normalized = normalizeModelSpec(spec);
+  if (normalized.fallbacks.length === 0) return normalized.primary;
+  return `${normalized.primary} (fallbacks: ${normalized.fallbacks.join(", ")})`;
 }

@@ -7,7 +7,8 @@ import type { Command } from "commander";
 import type { PluginRuntime } from "openclaw/plugin-sdk";
 import type { PluginContext } from "../context.js";
 import { runSetup } from "./index.js";
-import { getAllDefaultModels, getAllRoleIds, getLevelsForRole } from "../roles/index.js";
+import { getAllDefaultModels, getAllRoleIds, getLevelsForRole, normalizeModelSpec } from "../roles/index.js";
+import type { ModelSpec } from "../roles/index.js";
 import { readProjects, writeProjects, type Channel } from "../projects/index.js";
 import { log as auditLog } from "../audit.js";
 
@@ -43,7 +44,10 @@ export function registerCli(program: Command, ctx: PluginContext): void {
   for (const role of getAllRoleIds()) {
     for (const level of getLevelsForRole(role)) {
       const flag = `--${role}-${level}`;
-      setupCmd.option(`${flag} <model>`, `${role.toUpperCase()} ${level} model (default: ${defaults[role]?.[level] ?? "auto"})`);
+      setupCmd.option(
+        `${flag} <model>`,
+        `${role.toUpperCase()} ${level} model (default: ${formatModelSpec(defaults[role]?.[level] as ModelSpec | undefined)})`,
+      );
     }
   }
 
@@ -76,7 +80,7 @@ export function registerCli(program: Command, ctx: PluginContext): void {
       console.log("Models configured:");
       for (const [role, levels] of Object.entries(result.models)) {
         for (const [level, model] of Object.entries(levels)) {
-          console.log(`  ${role}.${level}: ${model}`);
+          console.log(`  ${role}.${level}: ${formatModelSpec(model as ModelSpec)}`);
         }
       }
 
@@ -339,4 +343,11 @@ export function registerCli(program: Command, ctx: PluginContext): void {
         process.exit(1);
       }
     });
+}
+
+function formatModelSpec(spec?: ModelSpec): string {
+  if (!spec) return "auto";
+  const normalized = normalizeModelSpec(spec);
+  if (normalized.fallbacks.length === 0) return normalized.primary;
+  return `${normalized.primary} (fallbacks: ${normalized.fallbacks.join(", ")})`;
 }

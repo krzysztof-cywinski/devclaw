@@ -5,7 +5,8 @@
  * To add a new role, add an entry to registry.ts — everything else derives from it.
  */
 export { ROLE_REGISTRY } from "./registry.js";
-export type { RoleConfig } from "./types.js";
+export type { RoleConfig, ModelSpec, ModelSpecObject } from "./types.js";
+export { normalizeModelSpec, getModelPrimary, getModelFallbacks, isModelSpecObject } from "./types.js";
 export {
   // Role IDs
   getAllRoleIds,

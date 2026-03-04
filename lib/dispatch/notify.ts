@@ -27,6 +27,8 @@ export type NotifyEvent =
       level: string;
       name?: string;
       sessionAction: "spawn" | "send";
+      model?: string;
+      fallbacks?: string[];
     }
   | {
       type: "workerComplete";

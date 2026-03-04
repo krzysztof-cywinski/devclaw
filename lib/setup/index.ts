@@ -9,7 +9,8 @@ import path from "node:path";
 import YAML from "yaml";
 import type { PluginRuntime } from "openclaw/plugin-sdk";
 import type { RunCommand } from "../context.js";
-import { getAllDefaultModels } from "../roles/index.js";
+import { getAllDefaultModels, normalizeModelSpec } from "../roles/index.js";
+import type { ModelSpec } from "../roles/index.js";
 import { migrateChannelBinding } from "./binding-manager.js";
 import { createAgent, resolveWorkspacePath } from "./agent.js";
 import { writePluginConfig } from "./config.js";
@@ -17,7 +18,7 @@ import { scaffoldWorkspace } from "./workspace.js";
 import { DATA_DIR } from "./migrate-layout.js";
 import type { ExecutionMode } from "../workflow/index.js";
 
-export type ModelConfig = Record<string, Record<string, string>>;
+export type ModelConfig = Record<string, Record<string, ModelSpec>>;
 
 export type SetupOpts = {
   /** OpenClaw plugin runtime for config access. */
@@ -33,7 +34,7 @@ export type SetupOpts = {
   /** Override workspace path (auto-detected from agent if not given). */
   workspacePath?: string;
   /** Model overrides per role.level. Missing levels use defaults. */
-  models?: Record<string, Partial<Record<string, string>>>;
+  models?: Record<string, Partial<Record<string, string | ModelSpec>>>;
   /** Plugin-level project execution mode: parallel or sequential. Default: parallel. */
   projectExecution?: ExecutionMode;
   /** Injected runCommand for dependency injection. */
@@ -130,19 +131,70 @@ function buildModelConfig(overrides?: SetupOpts["models"]): ModelConfig {
   const result: ModelConfig = {};
 
   for (const [role, levels] of Object.entries(defaults)) {
-    result[role] = { ...levels };
+    result[role] = {};
+    for (const [level, spec] of Object.entries(levels)) {
+      result[role][level] = cloneModelSpec(spec as ModelSpec);
+    }
   }
 
   if (overrides) {
     for (const [role, roleOverrides] of Object.entries(overrides)) {
       if (!result[role]) result[role] = {};
       for (const [level, model] of Object.entries(roleOverrides)) {
-        if (model) result[role][level] = model;
+        if (!model) continue;
+        const parsed = parseModelSpecInput(model as string | ModelSpec);
+        result[role][level] = cloneModelSpec(parsed);
       }
     }
   }
 
   return result;
+}
+
+function parseModelSpecInput(input: string | ModelSpec): ModelSpec {
+  if (typeof input !== "string") {
+    return cloneModelSpec(input);
+  }
+
+  const trimmed = input.trim();
+  if (!trimmed) {
+    throw new Error("Model override cannot be empty");
+  }
+
+  if (trimmed.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (typeof parsed === "string") {
+        return parsed;
+      }
+      if (parsed && typeof parsed === "object" && typeof parsed.primary === "string") {
+        const fallbacks = Array.isArray(parsed.fallbacks)
+          ? parsed.fallbacks.filter((f: unknown): f is string => typeof f === "string")
+          : undefined;
+        return fallbacks && fallbacks.length > 0
+          ? { primary: parsed.primary, fallbacks }
+          : parsed.primary;
+      }
+      throw new Error("JSON model spec must include a primary string");
+    } catch (err) {
+      throw new Error(`Invalid model spec JSON: ${(err as Error).message}`);
+    }
+  }
+
+  const csvParts = trimmed.split(",").map((part) => part.trim()).filter((part) => part.length > 0);
+  if (csvParts.length > 1) {
+    const [primary, ...fallbacks] = csvParts;
+    return fallbacks.length > 0 ? { primary, fallbacks } : primary;
+  }
+
+  return trimmed;
+}
+
+function cloneModelSpec(spec: ModelSpec): ModelSpec {
+  const normalized = normalizeModelSpec(spec);
+  return normalized.fallbacks.length > 0
+    ? { primary: normalized.primary, fallbacks: [...normalized.fallbacks] }
+    : normalized.primary;
 }
 
 function getDefaultWorkspacePath(runtime: PluginRuntime): string | undefined {

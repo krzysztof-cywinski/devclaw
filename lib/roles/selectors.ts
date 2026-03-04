@@ -5,7 +5,7 @@
  * No other file should access ROLE_REGISTRY directly for role logic.
  */
 import { ROLE_REGISTRY } from "./registry.js";
-import type { RoleConfig } from "./types.js";
+import type { RoleConfig, ModelSpec } from "./types.js";
 import type { ResolvedRoleConfig } from "../config/types.js";
 import { ROLE_ALIASES as _ROLE_ALIASES, canonicalLevel as _canonicalLevel } from "../projects/migrations.js";
 
@@ -81,13 +81,13 @@ export function getDefaultLevel(role: string): string | undefined {
 // ---------------------------------------------------------------------------
 
 /** Get default model for a role + level. */
-export function getDefaultModel(role: string, level: string): string | undefined {
+export function getDefaultModel(role: string, level: string): ModelSpec | undefined {
   return getRole(role)?.models[level];
 }
 
 /** Get all default models, nested by role (for config schema). */
-export function getAllDefaultModels(): Record<string, Record<string, string>> {
-  const result: Record<string, Record<string, string>> = {};
+export function getAllDefaultModels(): Record<string, Record<string, ModelSpec>> {
+  const result: Record<string, Record<string, ModelSpec>> = {};
   for (const [roleId, config] of Object.entries(ROLE_REGISTRY)) {
     result[roleId] = { ...config.models };
   }
@@ -95,7 +95,7 @@ export function getAllDefaultModels(): Record<string, Record<string, string>> {
 }
 
 /**
- * Resolve a level to a full model ID.
+ * Resolve a level to a model specification.
  *
  * Resolution order:
  * 1. Resolved config from workflow.yaml (three-layer merge)
@@ -106,14 +106,16 @@ export function resolveModel(
   role: string,
   level: string,
   resolvedRole?: ResolvedRoleConfig,
-): string {
+): ModelSpec {
   const canonical = _canonicalLevel(role, level);
 
   // 1. Resolved config (workflow.yaml — includes workspace + project overrides)
-  if (resolvedRole?.models[canonical]) return resolvedRole.models[canonical];
+  const override = resolvedRole?.models[canonical];
+  if (override !== undefined) return override;
 
   // 2. Built-in registry default
-  return getDefaultModel(role, canonical) ?? canonical;
+  const fallback = getDefaultModel(role, canonical);
+  return fallback ?? canonical;
 }
 
 // ---------------------------------------------------------------------------

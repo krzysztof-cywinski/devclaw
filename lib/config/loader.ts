@@ -12,6 +12,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import YAML from "yaml";
 import { ROLE_REGISTRY } from "../roles/registry.js";
+import { normalizeModelSpec, isModelSpecObject } from "../roles/types.js";
+import type { ModelSpec, ModelSpecObject } from "../roles/types.js";
 import { DEFAULT_WORKFLOW, type WorkflowConfig } from "../workflow/index.js";
 import { mergeConfig } from "./merge.js";
 import type { DevClawConfig, ResolvedConfig, ResolvedRoleConfig, ResolvedTimeouts, RoleOverride, ModelEntry } from "./types.js";
@@ -94,27 +96,91 @@ function buildDefaultConfig(): DevClawConfig {
 /** Default max workers per level when no override is set. */
 const DEFAULT_MAX_WORKERS_PER_LEVEL = 2;
 
-/** Flatten a ModelEntry map to string-only model IDs. */
-function flattenModels(entries: Record<string, ModelEntry>): Record<string, string> {
-  const flat: Record<string, string> = {};
+function combineFallbacks(...lists: (string[] | undefined)[]): string[] {
+  const seen = new Set<string>();
+  const merged: string[] = [];
+  for (const list of lists) {
+    if (!list) continue;
+    for (const item of list) {
+      if (typeof item !== "string") continue;
+      if (!seen.has(item)) {
+        seen.add(item);
+        merged.push(item);
+      }
+    }
+  }
+  return merged;
+}
+
+function buildModelSpec(primary: string, ...fallbackLists: (string[] | undefined)[]): ModelSpec {
+  const fallbacks = combineFallbacks(...fallbackLists);
+  return fallbacks.length > 0 ? { primary, fallbacks } : primary;
+}
+
+type ParsedModelEntry = { spec: ModelSpec; maxWorkers?: number };
+
+function parseModelEntry(roleId: string, level: string, entry: ModelEntry): ParsedModelEntry {
+  if (typeof entry === "string") {
+    return { spec: entry };
+  }
+
+  if (entry && typeof entry === "object") {
+    const anyEntry = entry as Record<string, unknown>;
+    const maxWorkers = typeof anyEntry.maxWorkers === "number" ? anyEntry.maxWorkers : undefined;
+
+    if (isModelSpecObject(entry as ModelSpec)) {
+      const specObj = entry as ModelSpecObject;
+      return { spec: buildModelSpec(specObj.primary, specObj.fallbacks), maxWorkers };
+    }
+
+    if (anyEntry.model !== undefined) {
+      const modelValue = anyEntry.model;
+      if (typeof modelValue === "string") {
+        return { spec: buildModelSpec(modelValue, anyEntry.fallbacks as string[] | undefined), maxWorkers };
+      }
+      if (modelValue && typeof modelValue === "object") {
+        const modelObj = modelValue as ModelSpecObject;
+        return {
+          spec: buildModelSpec(modelObj.primary, modelObj.fallbacks, anyEntry.fallbacks as string[] | undefined),
+          maxWorkers,
+        };
+      }
+    }
+
+    if (typeof anyEntry.primary === "string") {
+      return {
+        spec: buildModelSpec(anyEntry.primary, anyEntry.fallbacks as string[] | undefined),
+        maxWorkers,
+      };
+    }
+  }
+
+  throw new Error(`Invalid model entry for ${roleId}.${level}: must specify a model or primary.`);
+}
+
+/** Flatten a ModelEntry map to normalized model specs. */
+function flattenModels(roleId: string, entries: Record<string, ModelEntry>): Record<string, ModelSpec> {
+  const flat: Record<string, ModelSpec> = {};
   for (const [level, entry] of Object.entries(entries)) {
-    flat[level] = typeof entry === "string" ? entry : entry.model;
+    const parsed = parseModelEntry(roleId, level, entry);
+    const normalized = normalizeModelSpec(parsed.spec);
+    flat[level] = normalized.fallbacks.length > 0
+      ? { primary: normalized.primary, fallbacks: normalized.fallbacks }
+      : normalized.primary;
   }
   return flat;
 }
 
 /** Resolve per-level maxWorkers from model entries + global default. */
 function resolveLevelMaxWorkers(
+  roleId: string,
   models: Record<string, ModelEntry>,
   globalDefault: number,
 ): Record<string, number> {
   const result: Record<string, number> = {};
   for (const [level, entry] of Object.entries(models)) {
-    if (typeof entry === "object" && entry.maxWorkers !== undefined) {
-      result[level] = entry.maxWorkers;
-    } else {
-      result[level] = globalDefault;
-    }
+    const parsed = parseModelEntry(roleId, level, entry);
+    result[level] = parsed.maxWorkers ?? globalDefault;
   }
   return result;
 }
@@ -130,10 +196,10 @@ function resolve(config: DevClawConfig): ResolvedConfig {
         const reg = ROLE_REGISTRY[id];
         const models: Record<string, ModelEntry> = reg ? { ...reg.models } : {};
         roles[id] = {
-          levelMaxWorkers: resolveLevelMaxWorkers(models, globalMaxWorkers),
+          levelMaxWorkers: resolveLevelMaxWorkers(id, models, globalMaxWorkers),
           levels: reg ? [...reg.levels] : [],
           defaultLevel: reg?.defaultLevel ?? "",
-          models: flattenModels(models),
+          models: flattenModels(id, models),
           emoji: reg ? { ...reg.emoji } : {},
           completionResults: reg ? [...reg.completionResults] : [],
           enabled: false,
@@ -147,10 +213,10 @@ function resolve(config: DevClawConfig): ResolvedConfig {
         ...(override.models ?? {}),
       };
       roles[id] = {
-        levelMaxWorkers: resolveLevelMaxWorkers(mergedModels, globalMaxWorkers),
+        levelMaxWorkers: resolveLevelMaxWorkers(id, mergedModels, globalMaxWorkers),
         levels: override.levels ?? (reg ? [...reg.levels] : []),
         defaultLevel: override.defaultLevel ?? reg?.defaultLevel ?? "",
-        models: flattenModels(mergedModels),
+        models: flattenModels(id, mergedModels),
         emoji: { ...(reg?.emoji ?? {}), ...(override.emoji ?? {}) },
         completionResults: override.completionResults ?? (reg ? [...reg.completionResults] : []),
         enabled: true,
@@ -163,10 +229,10 @@ function resolve(config: DevClawConfig): ResolvedConfig {
     if (!roles[id]) {
       const models: Record<string, ModelEntry> = { ...reg.models };
       roles[id] = {
-        levelMaxWorkers: resolveLevelMaxWorkers(models, globalMaxWorkers),
+        levelMaxWorkers: resolveLevelMaxWorkers(id, models, globalMaxWorkers),
         levels: [...reg.levels],
         defaultLevel: reg.defaultLevel,
-        models: flattenModels(models),
+        models: flattenModels(id, models),
         emoji: { ...reg.emoji },
         completionResults: [...reg.completionResults],
         enabled: true,

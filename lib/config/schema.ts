@@ -39,11 +39,21 @@ const WorkflowConfigSchema = z.object({
   states: z.record(z.string(), StateConfigSchema),
 });
 
+const ModelSpecObjectSchema = z.object({
+  primary: z.string(),
+  fallbacks: z.array(z.string()).optional(),
+});
+
 const ModelEntrySchema = z.union([
   z.string(),
+  ModelSpecObjectSchema,
   z.object({
-    model: z.string(),
+    model: z.union([z.string(), ModelSpecObjectSchema]).optional(),
+    primary: z.string().optional(),
+    fallbacks: z.array(z.string()).optional(),
     maxWorkers: z.number().int().positive().optional(),
+  }).refine((value) => value.model !== undefined || value.primary !== undefined || value.maxWorkers !== undefined, {
+    message: "Model entry must specify `model`, `primary`, or `maxWorkers`.",
   }),
 ]);
 

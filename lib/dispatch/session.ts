@@ -67,9 +67,10 @@ export async function shouldClearSession(
  * Session key is deterministic, so we don't need to wait for confirmation.
  * If this fails, health check will catch orphaned state later.
  */
-export function ensureSessionFireAndForget(sessionKey: string, model: string, workspaceDir: string, runCommand: RunCommand, timeoutMs = 30_000, label?: string): void {
+export function ensureSessionFireAndForget(sessionKey: string, model: string, workspaceDir: string, runCommand: RunCommand, timeoutMs = 30_000, label?: string, fallbacks?: string[]): void {
   const rc = runCommand;
   const params: Record<string, unknown> = { key: sessionKey, model };
+  if (fallbacks && fallbacks.length > 0) params.fallbacks = fallbacks;
   if (label) params.label = label;
   rc(
     ["openclaw", "gateway", "call", "sessions.patch", "--params", JSON.stringify(params)],
