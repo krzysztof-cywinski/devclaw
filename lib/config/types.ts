@@ -14,14 +14,9 @@ import type { ModelSpec, ModelSpecObject } from "../roles/types.js";
 /** Model entry: string shorthand, structured spec, or legacy { model, maxWorkers } object. */
 export type ModelEntry =
   | string
-  | {
-      primary: string;
-      fallbacks?: string[];
-      maxWorkers?: number;
-    }
+  | ModelSpecObject
   | {
       model: string | ModelSpecObject;
-      fallbacks?: string[];
       maxWorkers?: number;
     };
 
