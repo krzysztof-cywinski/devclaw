@@ -44,17 +44,12 @@ const ModelSpecObjectSchema = z.object({
   fallbacks: z.array(z.string()).optional(),
 });
 
-const ModelSpecWithMaxWorkersSchema = ModelSpecObjectSchema.extend({
-  maxWorkers: z.number().int().positive().optional(),
-});
+const StringModelOrModelSpec = z.union([z.string(), ModelSpecObjectSchema]);
 
 const ModelEntrySchema = z.union([
-  z.string(),
-  ModelSpecObjectSchema,
-  ModelSpecWithMaxWorkersSchema,
+  StringModelOrModelSpec,
   z.object({
-    model: z.union([z.string(), ModelSpecObjectSchema]),
-    fallbacks: z.array(z.string()).optional(),
+    model: StringModelOrModelSpec,
     maxWorkers: z.number().int().positive().optional(),
   }),
 ]);
