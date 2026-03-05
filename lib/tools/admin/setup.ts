@@ -9,8 +9,8 @@ import type { ToolContext } from "../../types.js";
 import type { PluginContext } from "../../context.js";
 import { runSetup, type SetupOpts } from "../../setup/index.js";
 import { writeAllDefaults } from "../../setup/workspace.js";
-import { getAllDefaultModels, getAllRoleIds, getLevelsForRole, normalizeModelSpec } from "../../roles/index.js";
-import type { ModelSpec } from "../../roles/index.js";
+import { getAllDefaultModels, getAllRoleIds, getLevelsForRole, normalizeModelSpec, modelSpecToString } from "../../roles/index.js";
+import type { ModelSpec, ModelSpecInput } from "../../roles/index.js";
 import { ExecutionMode } from "../../workflow/index.js";
 
 export function createSetupTool(ctx: PluginContext) {
@@ -143,9 +143,7 @@ export function createSetupTool(ctx: PluginContext) {
   };
 }
 
-function formatModelSpec(spec?: ModelSpec): string {
+function formatModelSpec(spec?: ModelSpecInput): string {
   if (!spec) return "auto";
-  const normalized = normalizeModelSpec(spec);
-  if (normalized.fallbacks.length === 0) return normalized.primary;
-  return `${normalized.primary} (fallbacks: ${normalized.fallbacks.join(", ")})`;
+  return modelSpecToString(normalizeModelSpec(spec));
 }

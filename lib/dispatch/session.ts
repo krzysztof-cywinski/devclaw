@@ -70,18 +70,36 @@ export async function shouldClearSession(
  */
 export function ensureSessionFireAndForget(sessionKey: string, model: ModelSpec, workspaceDir: string, runCommand: RunCommand, timeoutMs = 30_000, label?: string): void {
   const rc = runCommand;
-  const params: Record<string, unknown> = { key: sessionKey, model: model.primary };
-  if (model.fallbacks.length > 0) params.fallbacks = model.fallbacks;
-  if (label) params.label = label;
-  rc(
-    ["openclaw", "gateway", "call", "sessions.patch", "--params", JSON.stringify(params)],
-    { timeoutMs },
-  ).catch((err) => {
-    auditLog(workspaceDir, "dispatch_warning", {
-      step: "ensureSession", sessionKey,
-      error: (err as Error).message ?? String(err),
-    }).catch(() => {});
-  });
+  const candidates = [model.primary, ...model.fallbacks];
+
+  const attempt = (index: number) => {
+    const params: Record<string, unknown> = { key: sessionKey, model: candidates[index] };
+    if (label) params.label = label;
+
+    rc(
+      ["openclaw", "gateway", "call", "sessions.patch", "--params", JSON.stringify(params)],
+      { timeoutMs },
+    ).catch((err) => {
+      const message = (err as Error).message ?? String(err);
+      if (isTransientModelError(message) && index + 1 < candidates.length) {
+        attempt(index + 1);
+        return;
+      }
+
+      auditLog(workspaceDir, "dispatch_warning", {
+        step: "ensureSession",
+        sessionKey,
+        error: message,
+      }).catch(() => {});
+    });
+  };
+
+  attempt(0);
+}
+
+function isTransientModelError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return lower.includes("429") || lower.includes("too many requests") || lower.includes("temporar") || lower.includes("503");
 }
 
 export function sendToAgent(

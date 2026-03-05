@@ -13,6 +13,7 @@ import { log as auditLog } from "../audit.js";
 import type { PluginRuntime } from "openclaw/plugin-sdk";
 import type { RunCommand } from "../context.js";
 import type { ModelSpec } from "../roles/index.js";
+import { modelSpecToString } from "../roles/index.js";
 
 /** Per-event-type toggle. All default to true — set to false to suppress. */
 export type NotificationConfig = Partial<Record<NotifyEvent["type"], boolean>>;
@@ -152,7 +153,8 @@ function buildMessage(event: NotifyEvent): string {
         name: event.name,
         level: event.level,
       });
-      return `${action} ${worker} on #${event.issueId}: ${event.issueTitle}\n🔗 [Issue #${event.issueId}](${event.issueUrl})`;
+      const modelLine = event.model ? `\n🧠 Model: ${modelSpecToString(event.model)}` : "";
+      return `${action} ${worker} on #${event.issueId}: ${event.issueTitle}${modelLine}\n🔗 [Issue #${event.issueId}](${event.issueUrl})`;
     }
 
     case "workerComplete": {

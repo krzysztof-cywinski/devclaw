@@ -6,7 +6,7 @@
  */
 export { ROLE_REGISTRY } from "./registry.js";
 export type { RoleConfig, ModelSpec, ModelSpecObject, ModelSpecInput } from "./types.js";
-export { normalizeModelSpec, getModelPrimary, getModelFallbacks, isModelSpecObject } from "./types.js";
+export { normalizeModelSpec, getModelPrimary, getModelFallbacks, isModelSpecObject, modelSpecToString } from "./types.js";
 export {
   // Role IDs
   getAllRoleIds,

@@ -54,6 +54,13 @@ export function getModelFallbacks(spec: ModelSpecInput): string[] {
   return normalizeModelSpec(spec).fallbacks;
 }
 
+/** Render a model spec as a human-readable string. */
+export function modelSpecToString(spec: ModelSpec): string {
+  return spec.fallbacks.length > 0
+    ? `${spec.primary} (fallbacks: ${spec.fallbacks.join(", ")})`
+    : spec.primary;
+}
+
 /** Configuration for a single worker role. */
 export type RoleConfig = {
   /** Unique role identifier (e.g., "developer", "tester", "architect"). */

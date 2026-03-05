@@ -108,7 +108,8 @@ describe("E2E pipeline", () => {
       });
 
       // Model should be resolved and returned
-      assert.ok(result.model, "dispatch should return a model");
+      assert.ok(result.model, "dispatch should return a model spec");
+      assert.strictEqual(result.model.primary, "anthropic/claude-sonnet-4-5");
 
       // Model must NOT be passed to the agent RPC (gateway rejects unknown props)
       const agentModels = h.commands.agentModels();
@@ -117,8 +118,8 @@ describe("E2E pipeline", () => {
       // Model is set on the session via sessions.patch instead
       const patches = h.commands.sessionPatches();
       assert.ok(patches.length > 0, "Should have patched session");
-      assert.strictEqual(patches[0].model, result.model,
-        `Session patch model should match: expected ${result.model}, got ${patches[0].model}`);
+      assert.strictEqual(patches[0].model, result.model.primary,
+        `Session patch model should match: expected ${result.model.primary}, got ${patches[0].model}`);
     });
 
     it("should propagate fallback chains to session patch and audit log", async () => {

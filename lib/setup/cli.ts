@@ -7,8 +7,8 @@ import type { Command } from "commander";
 import type { PluginRuntime } from "openclaw/plugin-sdk";
 import type { PluginContext } from "../context.js";
 import { runSetup } from "./index.js";
-import { getAllDefaultModels, getAllRoleIds, getLevelsForRole, normalizeModelSpec } from "../roles/index.js";
-import type { ModelSpec } from "../roles/index.js";
+import { getAllDefaultModels, getAllRoleIds, getLevelsForRole, normalizeModelSpec, modelSpecToString } from "../roles/index.js";
+import type { ModelSpec, ModelSpecInput } from "../roles/index.js";
 import { readProjects, writeProjects, type Channel } from "../projects/index.js";
 import { log as auditLog } from "../audit.js";
 
@@ -345,9 +345,7 @@ export function registerCli(program: Command, ctx: PluginContext): void {
     });
 }
 
-function formatModelSpec(spec?: ModelSpec): string {
+function formatModelSpec(spec?: ModelSpecInput): string {
   if (!spec) return "auto";
-  const normalized = normalizeModelSpec(spec);
-  if (normalized.fallbacks.length === 0) return normalized.primary;
-  return `${normalized.primary} (fallbacks: ${normalized.fallbacks.join(", ")})`;
+  return modelSpecToString(normalizeModelSpec(spec));
 }
