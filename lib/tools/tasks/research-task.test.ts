@@ -5,7 +5,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
 import { parseDevClawSessionKey } from "../../dispatch/bootstrap-hook.js";
-import { isLevelForRole, roleForLevel, resolveModel, getDefaultModel, getEmoji } from "../../roles/index.js";
+import { isLevelForRole, roleForLevel, resolveModel, getDefaultModel, getEmoji, normalizeModelSpec } from "../../roles/index.js";
 import { selectLevel } from "../../roles/model-selector.js";
 import {
   DEFAULT_WORKFLOW, getQueueLabels, getCompletionRule,
@@ -28,13 +28,21 @@ describe("architect tiers", () => {
   });
 
   it("should resolve default architect models", () => {
-    assert.strictEqual(getDefaultModel("architect", "senior"), "anthropic/claude-opus-4-6");
-    assert.strictEqual(getDefaultModel("architect", "junior"), "anthropic/claude-sonnet-4-5");
+    assert.strictEqual(getDefaultModel("architect", "senior")?.primary, "anthropic/claude-opus-4-6");
+    assert.strictEqual(getDefaultModel("architect", "junior")?.primary, "anthropic/claude-sonnet-4-5");
   });
 
   it("should resolve architect model from resolved role config", () => {
-    const resolvedRole = { levelMaxWorkers: { junior: 2, senior: 2 }, models: { senior: "custom/model" }, levels: ["junior", "senior"], defaultLevel: "junior", emoji: {}, completionResults: [] as string[], enabled: true };
-    assert.strictEqual(resolveModel("architect", "senior", resolvedRole), "custom/model");
+    const resolvedRole = {
+      levelMaxWorkers: { junior: 2, senior: 2 },
+      models: { senior: normalizeModelSpec("custom/model") },
+      levels: ["junior", "senior"],
+      defaultLevel: "junior",
+      emoji: {},
+      completionResults: [] as string[],
+      enabled: true,
+    };
+    assert.strictEqual(resolveModel("architect", "senior", resolvedRole).primary, "custom/model");
   });
 
   it("should have architect emoji", () => {

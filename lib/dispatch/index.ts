@@ -14,7 +14,7 @@ import {
   getRoleWorker,
   emptySlot,
 } from "../projects/index.js";
-import { resolveModel, normalizeModelSpec } from "../roles/index.js";
+import { resolveModel } from "../roles/index.js";
 import { notify, getNotificationConfig } from "./notify.js";
 import { loadConfig, type ResolvedRoleConfig } from "../config/index.js";
 import { ReviewPolicy, TestPolicy, resolveReviewRouting, resolveTestRouting, resolveNotifyChannel, isFeedbackState, hasReviewCheck, producesReviewableWork, hasTestPhase, detectOwner, getOwnerLabel, OWNER_LABEL_COLOR, getRoleLabelColor, STEP_ROUTING_COLOR, getStateLabels } from "../workflow/index.js";
@@ -98,9 +98,8 @@ export async function dispatchTask(
   const resolvedRole = resolvedConfig.roles[role];
   const { timeouts } = resolvedConfig;
   const modelSpec = resolveModel(role, level, resolvedRole);
-  const normalizedModel = normalizeModelSpec(modelSpec);
-  const primaryModel = normalizedModel.primary;
-  const fallbackModels = normalizedModel.fallbacks;
+  const primaryModel = modelSpec.primary;
+  const fallbackModels = modelSpec.fallbacks;
   const roleWorker = getRoleWorker(project, role);
   const slot = roleWorker.levels[level]?.[slotIndex] ?? emptySlot();
   let existingSessionKey = slot.sessionKey;

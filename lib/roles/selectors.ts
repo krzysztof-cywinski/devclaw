@@ -5,7 +5,8 @@
  * No other file should access ROLE_REGISTRY directly for role logic.
  */
 import { ROLE_REGISTRY } from "./registry.js";
-import type { RoleConfig, ModelSpec } from "./types.js";
+import { normalizeModelSpec } from "./types.js";
+import type { RoleConfig, ModelSpec, ModelSpecInput } from "./types.js";
 import type { ResolvedRoleConfig } from "../config/types.js";
 import { ROLE_ALIASES as _ROLE_ALIASES, canonicalLevel as _canonicalLevel } from "../projects/migrations.js";
 
@@ -82,12 +83,13 @@ export function getDefaultLevel(role: string): string | undefined {
 
 /** Get default model for a role + level. */
 export function getDefaultModel(role: string, level: string): ModelSpec | undefined {
-  return getRole(role)?.models[level];
+  const raw = getRole(role)?.models[level];
+  return raw !== undefined ? normalizeModelSpec(raw) : undefined;
 }
 
-/** Get all default models, nested by role (for config schema). */
-export function getAllDefaultModels(): Record<string, Record<string, ModelSpec>> {
-  const result: Record<string, Record<string, ModelSpec>> = {};
+/** Get all default models, nested by role (for config schema/display). */
+export function getAllDefaultModels(): Record<string, Record<string, ModelSpecInput>> {
+  const result: Record<string, Record<string, ModelSpecInput>> = {};
   for (const [roleId, config] of Object.entries(ROLE_REGISTRY)) {
     result[roleId] = { ...config.models };
   }
@@ -115,7 +117,10 @@ export function resolveModel(
 
   // 2. Built-in registry default
   const fallback = getDefaultModel(role, canonical);
-  return fallback ?? canonical;
+  if (fallback) return fallback;
+
+  // 3. Passthrough (use canonical level name as primary model)
+  return normalizeModelSpec(canonical);
 }
 
 // ---------------------------------------------------------------------------

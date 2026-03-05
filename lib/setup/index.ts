@@ -10,7 +10,7 @@ import YAML from "yaml";
 import type { PluginRuntime } from "openclaw/plugin-sdk";
 import type { RunCommand } from "../context.js";
 import { getAllDefaultModels, normalizeModelSpec } from "../roles/index.js";
-import type { ModelSpec } from "../roles/index.js";
+import type { ModelSpec, ModelSpecInput } from "../roles/index.js";
 import { migrateChannelBinding } from "./binding-manager.js";
 import { createAgent, resolveWorkspacePath } from "./agent.js";
 import { writePluginConfig } from "./config.js";
@@ -34,7 +34,7 @@ export type SetupOpts = {
   /** Override workspace path (auto-detected from agent if not given). */
   workspacePath?: string;
   /** Model overrides per role.level. Missing levels use defaults. */
-  models?: Record<string, Partial<Record<string, string | ModelSpec>>>;
+  models?: Record<string, Partial<Record<string, ModelSpecInput>>>;
   /** Plugin-level project execution mode: parallel or sequential. Default: parallel. */
   projectExecution?: ExecutionMode;
   /** Injected runCommand for dependency injection. */
@@ -151,7 +151,7 @@ function buildModelConfig(overrides?: SetupOpts["models"]): ModelConfig {
   return result;
 }
 
-function parseModelSpecInput(input: string | ModelSpec): ModelSpec {
+function parseModelSpecInput(input: string | ModelSpecInput): ModelSpec {
   if (typeof input !== "string") {
     return cloneModelSpec(input);
   }
@@ -165,15 +165,13 @@ function parseModelSpecInput(input: string | ModelSpec): ModelSpec {
     try {
       const parsed = JSON.parse(trimmed);
       if (typeof parsed === "string") {
-        return parsed;
+        return cloneModelSpec(parsed);
       }
       if (parsed && typeof parsed === "object" && typeof parsed.primary === "string") {
         const fallbacks = Array.isArray(parsed.fallbacks)
           ? parsed.fallbacks.filter((f: unknown): f is string => typeof f === "string")
-          : undefined;
-        return fallbacks && fallbacks.length > 0
-          ? { primary: parsed.primary, fallbacks }
-          : parsed.primary;
+          : [];
+        return cloneModelSpec({ primary: parsed.primary, fallbacks });
       }
       throw new Error("JSON model spec must include a primary string");
     } catch (err) {
@@ -184,17 +182,15 @@ function parseModelSpecInput(input: string | ModelSpec): ModelSpec {
   const csvParts = trimmed.split(",").map((part) => part.trim()).filter((part) => part.length > 0);
   if (csvParts.length > 1) {
     const [primary, ...fallbacks] = csvParts;
-    return fallbacks.length > 0 ? { primary, fallbacks } : primary;
+    return cloneModelSpec({ primary, fallbacks });
   }
 
-  return trimmed;
+  return cloneModelSpec(trimmed);
 }
 
-function cloneModelSpec(spec: ModelSpec): ModelSpec {
+function cloneModelSpec(spec: ModelSpecInput): ModelSpec {
   const normalized = normalizeModelSpec(spec);
-  return normalized.fallbacks.length > 0
-    ? { primary: normalized.primary, fallbacks: [...normalized.fallbacks] }
-    : normalized.primary;
+  return { primary: normalized.primary, fallbacks: [...normalized.fallbacks] };
 }
 
 function getDefaultWorkspacePath(runtime: PluginRuntime): string | undefined {

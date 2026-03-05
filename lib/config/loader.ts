@@ -111,7 +111,7 @@ function combineFallbacks(...lists: (string[] | undefined)[]): string[] {
 
 function buildModelSpec(primary: string, ...fallbackLists: (string[] | undefined)[]): ModelSpec {
   const fallbacks = combineFallbacks(...fallbackLists);
-  return fallbacks.length > 0 ? { primary, fallbacks } : primary;
+  return { primary, fallbacks };
 }
 
 type ParsedModelEntry = { spec: ModelSpec; maxWorkers?: number };
@@ -177,10 +177,7 @@ function flattenModels(roleId: string, entries: Record<string, ModelEntry>): Rec
   const flat: Record<string, ModelSpec> = {};
   for (const [level, entry] of Object.entries(entries)) {
     const parsed = parseModelEntry(roleId, level, entry);
-    const normalized = normalizeModelSpec(parsed.spec);
-    flat[level] = normalized.fallbacks.length > 0
-      ? { primary: normalized.primary, fallbacks: normalized.fallbacks }
-      : normalized.primary;
+    flat[level] = normalizeModelSpec(parsed.spec);
   }
   return flat;
 }

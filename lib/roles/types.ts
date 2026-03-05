@@ -5,41 +5,52 @@
  * All role-related behavior should be derived from this config.
  */
 
-/** Structured model specification with optional fallbacks. */
+/** Structured model specification with optional fallbacks (input form). */
 export type ModelSpecObject = {
   primary: string;
   fallbacks?: string[];
 };
 
-/** Model specification accepted by the registry and selectors. */
-export type ModelSpec = string | ModelSpecObject;
+/** Normalized model specification used throughout the runtime. */
+export type ModelSpec = {
+  primary: string;
+  fallbacks: string[];
+};
 
-/** Determine whether a model spec is an object with primary/fallbacks. */
-export function isModelSpecObject(spec: ModelSpec): spec is ModelSpecObject {
+/** Accepts string or object input when normalizing. */
+export type ModelSpecInput = string | ModelSpecObject | ModelSpec;
+
+/** Determine whether a value is a structured model spec input. */
+export function isModelSpecObject(spec: unknown): spec is ModelSpecObject {
   return typeof spec === "object" && spec !== null && "primary" in spec;
 }
 
 /**
- * Normalize a model spec into a primary model plus fallbacks array.
+ * Normalize a model spec into `{ primary, fallbacks[] }`.
  * Returns a shallow copy so callers can mutate the fallback list safely.
  */
-export function normalizeModelSpec(spec: ModelSpec): { primary: string; fallbacks: string[] } {
-  if (isModelSpecObject(spec)) {
-    const fallbacks = Array.isArray(spec.fallbacks)
-      ? spec.fallbacks.filter((f): f is string => typeof f === "string")
-      : [];
-    return { primary: spec.primary, fallbacks: [...fallbacks] };
+export function normalizeModelSpec(spec: ModelSpecInput): ModelSpec {
+  if (typeof spec === "string") {
+    return { primary: spec, fallbacks: [] };
   }
-  return { primary: spec, fallbacks: [] };
+
+  const fallbacksSource = Array.isArray((spec as ModelSpecObject).fallbacks)
+    ? (spec as ModelSpecObject).fallbacks!
+    : Array.isArray((spec as ModelSpec).fallbacks)
+      ? (spec as ModelSpec).fallbacks
+      : [];
+
+  const fallbacks = fallbacksSource.filter((f): f is string => typeof f === "string");
+  return { primary: spec.primary, fallbacks: [...new Set(fallbacks)] };
 }
 
 /** Get the primary model ID for a model spec. */
-export function getModelPrimary(spec: ModelSpec): string {
+export function getModelPrimary(spec: ModelSpecInput): string {
   return normalizeModelSpec(spec).primary;
 }
 
 /** Get the fallback model IDs for a model spec. */
-export function getModelFallbacks(spec: ModelSpec): string[] {
+export function getModelFallbacks(spec: ModelSpecInput): string[] {
   return normalizeModelSpec(spec).fallbacks;
 }
 
@@ -54,7 +65,7 @@ export type RoleConfig = {
   /** Default level when none specified. */
   defaultLevel: string;
   /** Default model per level. */
-  models: Record<string, ModelSpec>;
+  models: Record<string, ModelSpecInput>;
   /** Emoji per level (used in announcements). */
   emoji: Record<string, string>;
   /** Fallback emoji when level-specific emoji not found. */
