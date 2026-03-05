@@ -196,8 +196,8 @@ Example:
         research: {
           sessionKey: dr.sessionKey,
           level: dr.level,
-          model: dr.model,
-          fallbacks: dr.fallbacks,
+          model: dr.model.primary,
+          fallbacks: dr.model.fallbacks.length > 0 ? dr.model.fallbacks : undefined,
           sessionAction: dr.sessionAction,
           status: "in_progress",
         },

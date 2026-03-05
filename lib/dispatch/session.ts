@@ -4,6 +4,7 @@
 import type { RunCommand } from "../context.js";
 import { log as auditLog } from "../audit.js";
 import { fetchGatewaySessions } from "../services/gateway-sessions.js";
+import type { ModelSpec } from "../roles/index.js";
 
 // ---------------------------------------------------------------------------
 // Context budget management
@@ -67,10 +68,10 @@ export async function shouldClearSession(
  * Session key is deterministic, so we don't need to wait for confirmation.
  * If this fails, health check will catch orphaned state later.
  */
-export function ensureSessionFireAndForget(sessionKey: string, model: string, workspaceDir: string, runCommand: RunCommand, timeoutMs = 30_000, label?: string, fallbacks?: string[]): void {
+export function ensureSessionFireAndForget(sessionKey: string, model: ModelSpec, workspaceDir: string, runCommand: RunCommand, timeoutMs = 30_000, label?: string): void {
   const rc = runCommand;
-  const params: Record<string, unknown> = { key: sessionKey, model };
-  if (fallbacks && fallbacks.length > 0) params.fallbacks = fallbacks;
+  const params: Record<string, unknown> = { key: sessionKey, model: model.primary };
+  if (model.fallbacks.length > 0) params.fallbacks = model.fallbacks;
   if (label) params.label = label;
   rc(
     ["openclaw", "gateway", "call", "sessions.patch", "--params", JSON.stringify(params)],

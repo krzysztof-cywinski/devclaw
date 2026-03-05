@@ -12,6 +12,7 @@
 import { log as auditLog } from "../audit.js";
 import type { PluginRuntime } from "openclaw/plugin-sdk";
 import type { RunCommand } from "../context.js";
+import type { ModelSpec } from "../roles/index.js";
 
 /** Per-event-type toggle. All default to true — set to false to suppress. */
 export type NotificationConfig = Partial<Record<NotifyEvent["type"], boolean>>;
@@ -27,8 +28,7 @@ export type NotifyEvent =
       level: string;
       name?: string;
       sessionAction: "spawn" | "send";
-      model?: string;
-      fallbacks?: string[];
+      model?: ModelSpec;
     }
   | {
       type: "workerComplete";
