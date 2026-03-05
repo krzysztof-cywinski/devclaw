@@ -39,7 +39,7 @@ export type CapturedCommand = {
   /** Extracted from gateway `agent` call params, if applicable. */
   agentModel?: string;
   /** Extracted from gateway `sessions.patch` params, if applicable. */
-  sessionPatch?: { key: string; model: string; label?: string };
+  sessionPatch?: { key: string; model: string; label?: string; fallbacks?: string[] };
 };
 
 export type CommandInterceptor = {
@@ -54,7 +54,7 @@ export type CommandInterceptor = {
   /** Get all agent models sent via `openclaw gateway call agent`. */
   agentModels(): string[];
   /** Get all session patches. */
-  sessionPatches(): Array<{ key: string; model: string; label?: string }>;
+  sessionPatches(): Array<{ key: string; model: string; label?: string; fallbacks?: string[] }>;
   /** Reset captured commands. */
   reset(): void;
 };
@@ -92,7 +92,12 @@ function createCommandInterceptor(): {
             }
           }
           if (rpcMethod === "sessions.patch") {
-            captured.sessionPatch = { key: params.key, model: params.model, label: params.label };
+            captured.sessionPatch = {
+              key: params.key,
+              model: params.model,
+              label: params.label,
+              fallbacks: Array.isArray(params.fallbacks) ? params.fallbacks : undefined,
+            };
           }
         } catch { /* ignore parse errors */ }
       }

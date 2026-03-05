@@ -4,6 +4,7 @@
 import type { RunCommand } from "../context.js";
 import { log as auditLog } from "../audit.js";
 import { fetchGatewaySessions } from "../services/gateway-sessions.js";
+import type { ModelSpec } from "../roles/index.js";
 
 // ---------------------------------------------------------------------------
 // Context budget management
@@ -67,19 +68,38 @@ export async function shouldClearSession(
  * Session key is deterministic, so we don't need to wait for confirmation.
  * If this fails, health check will catch orphaned state later.
  */
-export function ensureSessionFireAndForget(sessionKey: string, model: string, workspaceDir: string, runCommand: RunCommand, timeoutMs = 30_000, label?: string): void {
+export function ensureSessionFireAndForget(sessionKey: string, model: ModelSpec, workspaceDir: string, runCommand: RunCommand, timeoutMs = 30_000, label?: string): void {
   const rc = runCommand;
-  const params: Record<string, unknown> = { key: sessionKey, model };
-  if (label) params.label = label;
-  rc(
-    ["openclaw", "gateway", "call", "sessions.patch", "--params", JSON.stringify(params)],
-    { timeoutMs },
-  ).catch((err) => {
-    auditLog(workspaceDir, "dispatch_warning", {
-      step: "ensureSession", sessionKey,
-      error: (err as Error).message ?? String(err),
-    }).catch(() => {});
-  });
+  const candidates = [model.primary, ...model.fallbacks];
+
+  const attempt = (index: number) => {
+    const params: Record<string, unknown> = { key: sessionKey, model: candidates[index] };
+    if (label) params.label = label;
+
+    rc(
+      ["openclaw", "gateway", "call", "sessions.patch", "--params", JSON.stringify(params)],
+      { timeoutMs },
+    ).catch((err) => {
+      const message = (err as Error).message ?? String(err);
+      if (isTransientModelError(message) && index + 1 < candidates.length) {
+        attempt(index + 1);
+        return;
+      }
+
+      auditLog(workspaceDir, "dispatch_warning", {
+        step: "ensureSession",
+        sessionKey,
+        error: message,
+      }).catch(() => {});
+    });
+  };
+
+  attempt(0);
+}
+
+function isTransientModelError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return lower.includes("429") || lower.includes("too many requests") || lower.includes("temporar") || lower.includes("503");
 }
 
 export function sendToAgent(

@@ -10,6 +10,8 @@
  */
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { createTestHarness, type TestHarness } from "../testing/index.js";
 import { dispatchTask } from "../dispatch/index.js";
 import { executeCompletion } from "./pipeline.js";
@@ -106,7 +108,8 @@ describe("E2E pipeline", () => {
       });
 
       // Model should be resolved and returned
-      assert.ok(result.model, "dispatch should return a model");
+      assert.ok(result.model, "dispatch should return a model spec");
+      assert.strictEqual(result.model.primary, "anthropic/claude-sonnet-4-5");
 
       // Model must NOT be passed to the agent RPC (gateway rejects unknown props)
       const agentModels = h.commands.agentModels();
@@ -115,8 +118,57 @@ describe("E2E pipeline", () => {
       // Model is set on the session via sessions.patch instead
       const patches = h.commands.sessionPatches();
       assert.ok(patches.length > 0, "Should have patched session");
-      assert.strictEqual(patches[0].model, result.model,
-        `Session patch model should match: expected ${result.model}, got ${patches[0].model}`);
+      assert.strictEqual(patches[0].model, result.model.primary,
+        `Session patch model should match: expected ${result.model.primary}, got ${patches[0].model}`);
+    });
+
+    it("should propagate fallback chains to session patch and audit log", async () => {
+      await fs.mkdir(path.join(h.workspaceDir, "devclaw"), { recursive: true });
+      await fs.writeFile(
+        path.join(h.workspaceDir, "devclaw", "workflow.yaml"),
+        `roles:\n  developer:\n    models:\n      medior:\n        model:\n          primary: anthropic/claude-sonnet-4-6\n          fallbacks:\n            - openai/gpt-5-codex\n            - anthropic/claude-haiku-4-5\n`,
+        "utf-8",
+      );
+
+      const issueId = 137;
+      h.provider.seedIssue({ iid: issueId, title: "Fallback test", labels: ["To Do"] });
+
+      const result = await dispatchTask({
+        workspaceDir: h.workspaceDir,
+        agentId: "test-agent",
+        project: h.project,
+        issueId,
+        issueTitle: "Fallback test",
+        issueDescription: "Ensure fallback chain propagates",
+        issueUrl: "https://example.com/issues/137",
+        role: "developer",
+        level: "medior",
+        fromLabel: "To Do",
+        toLabel: "Doing",
+        provider: h.provider,
+        runCommand: h.runCommand,
+      });
+
+      assert.deepStrictEqual(result.fallbacks, [
+        "openai/gpt-5-codex",
+        "anthropic/claude-haiku-4-5",
+      ]);
+
+      const patches = h.commands.sessionPatches();
+      assert.ok(patches.length > 0, "Should have patched session with fallback chain");
+      assert.deepStrictEqual(patches[0].fallbacks, result.fallbacks);
+
+      const auditPath = path.join(h.workspaceDir, "devclaw", "log", "audit.log");
+      const logContent = await fs.readFile(auditPath, "utf-8");
+      const modelSelection = logContent
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line))
+        .reverse()
+        .find((entry) => entry.event === "model_selection" && entry.issue === issueId);
+
+      assert.ok(modelSelection, "Expected model_selection audit entry");
+      assert.deepStrictEqual(modelSelection.fallbacks, result.fallbacks);
     });
 
     it("should include comments in task message", async () => {

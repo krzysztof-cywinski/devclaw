@@ -9,7 +9,8 @@ import path from "node:path";
 import YAML from "yaml";
 import type { PluginRuntime } from "openclaw/plugin-sdk";
 import type { RunCommand } from "../context.js";
-import { getAllDefaultModels } from "../roles/index.js";
+import { getAllDefaultModels, normalizeModelSpec } from "../roles/index.js";
+import type { ModelSpec, ModelSpecInput } from "../roles/index.js";
 import { migrateChannelBinding } from "./binding-manager.js";
 import { createAgent, resolveWorkspacePath } from "./agent.js";
 import { writePluginConfig } from "./config.js";
@@ -17,7 +18,7 @@ import { scaffoldWorkspace } from "./workspace.js";
 import { DATA_DIR } from "./migrate-layout.js";
 import type { ExecutionMode } from "../workflow/index.js";
 
-export type ModelConfig = Record<string, Record<string, string>>;
+export type ModelConfig = Record<string, Record<string, ModelSpec>>;
 
 export type SetupOpts = {
   /** OpenClaw plugin runtime for config access. */
@@ -33,7 +34,7 @@ export type SetupOpts = {
   /** Override workspace path (auto-detected from agent if not given). */
   workspacePath?: string;
   /** Model overrides per role.level. Missing levels use defaults. */
-  models?: Record<string, Partial<Record<string, string>>>;
+  models?: Record<string, Partial<Record<string, ModelSpecInput>>>;
   /** Plugin-level project execution mode: parallel or sequential. Default: parallel. */
   projectExecution?: ExecutionMode;
   /** Injected runCommand for dependency injection. */
@@ -130,19 +131,66 @@ function buildModelConfig(overrides?: SetupOpts["models"]): ModelConfig {
   const result: ModelConfig = {};
 
   for (const [role, levels] of Object.entries(defaults)) {
-    result[role] = { ...levels };
+    result[role] = {};
+    for (const [level, spec] of Object.entries(levels)) {
+      result[role][level] = cloneModelSpec(spec as ModelSpec);
+    }
   }
 
   if (overrides) {
     for (const [role, roleOverrides] of Object.entries(overrides)) {
       if (!result[role]) result[role] = {};
       for (const [level, model] of Object.entries(roleOverrides)) {
-        if (model) result[role][level] = model;
+        if (!model) continue;
+        const parsed = parseModelSpecInput(model as string | ModelSpec);
+        result[role][level] = cloneModelSpec(parsed);
       }
     }
   }
 
   return result;
+}
+
+function parseModelSpecInput(input: string | ModelSpecInput): ModelSpec {
+  if (typeof input !== "string") {
+    return cloneModelSpec(input);
+  }
+
+  const trimmed = input.trim();
+  if (!trimmed) {
+    throw new Error("Model override cannot be empty");
+  }
+
+  if (trimmed.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (typeof parsed === "string") {
+        return cloneModelSpec(parsed);
+      }
+      if (parsed && typeof parsed === "object" && typeof parsed.primary === "string") {
+        const fallbacks = Array.isArray(parsed.fallbacks)
+          ? parsed.fallbacks.filter((f: unknown): f is string => typeof f === "string")
+          : [];
+        return cloneModelSpec({ primary: parsed.primary, fallbacks });
+      }
+      throw new Error("JSON model spec must include a primary string");
+    } catch (err) {
+      throw new Error(`Invalid model spec JSON: ${(err as Error).message}`);
+    }
+  }
+
+  const csvParts = trimmed.split(",").map((part) => part.trim()).filter((part) => part.length > 0);
+  if (csvParts.length > 1) {
+    const [primary, ...fallbacks] = csvParts;
+    return cloneModelSpec({ primary, fallbacks });
+  }
+
+  return cloneModelSpec(trimmed);
+}
+
+function cloneModelSpec(spec: ModelSpecInput): ModelSpec {
+  const normalized = normalizeModelSpec(spec);
+  return { primary: normalized.primary, fallbacks: [...normalized.fallbacks] };
 }
 
 function getDefaultWorkspacePath(runtime: PluginRuntime): string | undefined {
@@ -177,13 +225,32 @@ async function writeModelsToWorkflow(workspacePath: string, models: ModelConfig)
 
   // Merge models into roles section
   for (const [role, levels] of Object.entries(models)) {
+    const serializedLevels = serializeModelLevels(levels);
     if (!roles.has(role)) {
-      roles.set(role, doc.createNode({ models: levels }));
+      roles.set(role, doc.createNode({ models: serializedLevels }));
     } else {
       const roleNode = roles.get(role, true) as unknown as YAML.YAMLMap;
-      roleNode.set("models", doc.createNode(levels));
+      roleNode.set("models", doc.createNode(serializedLevels));
     }
   }
 
   await fs.writeFile(workflowPath, doc.toString({ lineWidth: 120 }), "utf-8");
+}
+
+function serializeModelLevels(levels: Record<string, ModelSpec>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [level, spec] of Object.entries(levels)) {
+    const normalized = normalizeModelSpec(spec);
+    if (normalized.fallbacks.length === 0) {
+      result[level] = normalized.primary;
+    } else {
+      result[level] = {
+        model: {
+          primary: normalized.primary,
+          fallbacks: [...normalized.fallbacks],
+        },
+      };
+    }
+  }
+  return result;
 }

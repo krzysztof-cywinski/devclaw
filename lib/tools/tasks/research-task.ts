@@ -119,14 +119,19 @@ Example:
         : selectLevel(title, description, role).level;
       const resolvedConfig = await loadConfig(workspaceDir, project.name);
       const resolvedRole = resolvedConfig.roles[role];
-      const model = resolveModel(role, level, resolvedRole);
+      const modelSpec = resolveModel(role, level, resolvedRole);
 
       if (dryRun) {
         return jsonResult({
           success: true,
           dryRun: true,
           issue: { title, label: TO_RESEARCH_LABEL },
-          research: { level, model, status: "dry_run" },
+          research: {
+            level,
+            model: modelSpec.primary,
+            fallbacks: modelSpec.fallbacks.length > 0 ? modelSpec.fallbacks : undefined,
+            status: "dry_run",
+          },
           announcement: `\u{1f4d0} [DRY RUN] Would create research ticket and dispatch ${role} (${level}) for: ${title}`,
         });
       }
@@ -191,7 +196,8 @@ Example:
         research: {
           sessionKey: dr.sessionKey,
           level: dr.level,
-          model: dr.model,
+          model: dr.model.primary,
+          fallbacks: dr.model.fallbacks.length > 0 ? dr.model.fallbacks : undefined,
           sessionAction: dr.sessionAction,
           status: "in_progress",
         },

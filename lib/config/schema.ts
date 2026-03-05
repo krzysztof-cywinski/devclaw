@@ -39,10 +39,17 @@ const WorkflowConfigSchema = z.object({
   states: z.record(z.string(), StateConfigSchema),
 });
 
+const ModelSpecObjectSchema = z.object({
+  primary: z.string(),
+  fallbacks: z.array(z.string()).optional(),
+});
+
+const StringModelOrModelSpec = z.union([z.string(), ModelSpecObjectSchema]);
+
 const ModelEntrySchema = z.union([
-  z.string(),
+  StringModelOrModelSpec,
   z.object({
-    model: z.string(),
+    model: StringModelOrModelSpec,
     maxWorkers: z.number().int().positive().optional(),
   }),
 ]);

@@ -24,6 +24,7 @@ import {
   getCompletionResults,
   isValidResult,
   getSessionKeyRolePattern,
+  normalizeModelSpec,
 } from "./index.js";
 
 describe("role registry", () => {
@@ -144,31 +145,73 @@ describe("models", () => {
   });
 
   it("should resolve from resolved role config override", () => {
-    const resolvedRole = { levelMaxWorkers: { junior: 2, medior: 2, senior: 2 }, models: { junior: "custom/model" }, levels: ["junior", "medior", "senior"], defaultLevel: "medior", emoji: {}, completionResults: [] as string[], enabled: true };
-    assert.strictEqual(resolveModel("developer", "junior", resolvedRole), "custom/model");
+    const resolvedRole = {
+      levelMaxWorkers: { junior: 2, medior: 2, senior: 2 },
+      models: { junior: normalizeModelSpec("custom/model") },
+      levels: ["junior", "medior", "senior"],
+      defaultLevel: "medior",
+      emoji: {},
+      completionResults: [] as string[],
+      enabled: true,
+    };
+    assert.strictEqual(resolveModel("developer", "junior", resolvedRole).primary, "custom/model");
   });
 
   it("should fall back to default", () => {
-    assert.strictEqual(resolveModel("developer", "junior"), "anthropic/claude-haiku-4-5");
+    assert.strictEqual(resolveModel("developer", "junior").primary, "anthropic/claude-haiku-4-5");
   });
 
   it("should pass through unknown level as model ID", () => {
-    assert.strictEqual(resolveModel("developer", "anthropic/claude-opus-4-6"), "anthropic/claude-opus-4-6");
+    const spec = resolveModel("developer", "anthropic/claude-opus-4-6");
+    assert.deepStrictEqual(spec, { primary: "anthropic/claude-opus-4-6", fallbacks: [] });
   });
 
   it("should resolve via level aliases", () => {
     // "mid" alias maps to "medior" — should resolve to default medior model
-    assert.strictEqual(resolveModel("developer", "mid"), "anthropic/claude-sonnet-4-5");
+    assert.strictEqual(resolveModel("developer", "mid").primary, "anthropic/claude-sonnet-4-5");
     // With explicit override in resolved config
-    const resolvedRole = { levelMaxWorkers: { junior: 2, medior: 2, senior: 2 }, models: { medior: "custom/old-config-model" }, levels: ["junior", "medior", "senior"], defaultLevel: "medior", emoji: {}, completionResults: [] as string[], enabled: true };
-    assert.strictEqual(resolveModel("developer", "mid", resolvedRole), "custom/old-config-model");
+    const resolvedRole = {
+      levelMaxWorkers: { junior: 2, medior: 2, senior: 2 },
+      models: { medior: normalizeModelSpec("custom/old-config-model") },
+      levels: ["junior", "medior", "senior"],
+      defaultLevel: "medior",
+      emoji: {},
+      completionResults: [] as string[],
+      enabled: true,
+    };
+    assert.strictEqual(resolveModel("developer", "mid", resolvedRole).primary, "custom/old-config-model");
   });
 
   it("should resolve with resolved role overriding defaults selectively", () => {
-    const resolvedRole = { levelMaxWorkers: { junior: 2, medior: 2, senior: 2 }, models: { junior: "custom/model" }, levels: ["junior", "medior", "senior"], defaultLevel: "medior", emoji: {}, completionResults: [] as string[], enabled: true };
-    assert.strictEqual(resolveModel("developer", "junior", resolvedRole), "custom/model");
+    const resolvedRole = {
+      levelMaxWorkers: { junior: 2, medior: 2, senior: 2 },
+      models: { junior: normalizeModelSpec("custom/model") },
+      levels: ["junior", "medior", "senior"],
+      defaultLevel: "medior",
+      emoji: {},
+      completionResults: [] as string[],
+      enabled: true,
+    };
+    assert.strictEqual(resolveModel("developer", "junior", resolvedRole).primary, "custom/model");
     // Levels not overridden fall through to registry defaults
-    assert.strictEqual(resolveModel("developer", "medior", resolvedRole), "anthropic/claude-sonnet-4-5");
+    assert.strictEqual(resolveModel("developer", "medior", resolvedRole).primary, "anthropic/claude-sonnet-4-5");
+  });
+
+  it("should normalize fallback chains when provided", () => {
+    const resolvedRole = {
+      levelMaxWorkers: { junior: 2, medior: 2, senior: 2 },
+      models: { medior: normalizeModelSpec({ primary: "anthropic/claude-sonnet-4-6", fallbacks: ["openai/gpt-5-codex"] }) },
+      levels: ["junior", "medior", "senior"],
+      defaultLevel: "medior",
+      emoji: {},
+      completionResults: [] as string[],
+      enabled: true,
+    };
+    const spec = resolveModel("developer", "medior", resolvedRole);
+    assert.deepStrictEqual(spec, {
+      primary: "anthropic/claude-sonnet-4-6",
+      fallbacks: ["openai/gpt-5-codex"],
+    });
   });
 });
 

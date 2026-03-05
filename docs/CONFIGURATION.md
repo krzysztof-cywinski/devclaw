@@ -24,14 +24,19 @@ The `workflow.yaml` file configures roles, workflow states, and timeouts. Place 
 
 ### Role Configuration
 
-Override which LLM model powers each level, customize levels, or disable roles entirely:
+Override which LLM model powers each level, customize levels, or disable roles entirely. Models now support inline fallback chains:
 
 ```yaml
 roles:
   developer:
     models:
       junior: anthropic/claude-haiku-4-5
-      medior: anthropic/claude-sonnet-4-5
+      medior:
+        model:
+          primary: anthropic/claude-sonnet-4-6
+          fallbacks:
+            - openai/gpt-5-codex
+            - anthropic/claude-sonnet-4-5
       senior: anthropic/claude-opus-4-6
   tester:
     models:
@@ -46,15 +51,19 @@ roles:
   # architect: false
 ```
 
+> **Tip:** Keep simple cases as strings (equivalent to `{ model: "<value>" }`). To add fallbacks, wrap the spec under `model:` and list `primary` plus `fallbacks` as shown above. Comma-separated shorthand (`primary, fallback1, fallback2`) still works when editing by hand.
+
 **Role override fields** (all optional — only override what you need):
 
 | Field | Type | Description |
 |---|---|---|
 | `levels` | string[] | Available levels for this role |
 | `defaultLevel` | string | Default level when not specified |
-| `models` | Record<string, string> | Model ID per level |
+| `models` | Record<string, `ModelSpec`> | Primary + fallback list per level (string shorthand allowed) |
 | `emoji` | Record<string, string> | Emoji per level for announcements |
 | `completionResults` | string[] | Valid completion results |
+
+`ModelSpec = string | { primary: string; fallbacks?: string[] }`
 
 **Default models:**
 

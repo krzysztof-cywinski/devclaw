@@ -5,13 +5,20 @@
  * Three-layer resolution: built-in → workspace → per-project.
  */
 import type { WorkflowConfig } from "../workflow/index.js";
+import type { ModelSpec, ModelSpecObject } from "../roles/types.js";
 
 /**
  * Role override in workflow.yaml. All fields optional — only override what you need.
  * Set to `false` to disable a role entirely for a project.
  */
-/** Model entry: plain string or object with per-level maxWorkers override. */
-export type ModelEntry = string | { model: string; maxWorkers?: number };
+/** Model entry: string shorthand, structured spec, or legacy { model, maxWorkers } object. */
+export type ModelEntry =
+  | string
+  | ModelSpecObject
+  | {
+      model: string | ModelSpecObject;
+      maxWorkers?: number;
+    };
 
 export type RoleOverride = {
   maxWorkers?: number; // @deprecated — kept for backward compat, ignored by resolver
@@ -92,8 +99,8 @@ export type ResolvedRoleConfig = {
   levelMaxWorkers: Record<string, number>;
   levels: string[];
   defaultLevel: string;
-  /** Flattened model map (string IDs only, for existing consumers). */
-  models: Record<string, string>;
+  /** Flattened model map (string or structured specs, for existing consumers). */
+  models: Record<string, ModelSpec>;
   emoji: Record<string, string>;
   completionResults: string[];
   enabled: boolean;
